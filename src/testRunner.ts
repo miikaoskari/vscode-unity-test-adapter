@@ -277,15 +277,28 @@ export class TestRunner {
 		const release = await this.suiteMutex.acquire();
 		try {
 			return new Promise<any>((resolve) => {
-				this.suiteProcess = childProcess.exec(
-					command,
+				const args = command.split(' ').filter(a => a.length > 0);
+				const executable = args.shift()!;
+				this.suiteProcess = childProcess.spawn(
+					executable,
+					args,
 					{
 						cwd: workspace?.uri.fsPath,
-					},
-					(error, stdout, stderr) => {
-						resolve({ error, stdout, stderr });
-					},
+					}
 				);
+				let stdout = '';
+				let stderr = '';
+				if (this.suiteProcess && this.suiteProcess.stdout) {
+					this.suiteProcess.stdout.on('data', (data) => { stdout += data.toString(); });
+				}
+				if (this.suiteProcess && this.suiteProcess.stderr) {
+					this.suiteProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+				}
+				if (this.suiteProcess) {
+					this.suiteProcess.on('close', (code) => {
+						resolve({ error: code !== 0 ? new Error(`Exited with code ${code}`) : null, stdout, stderr });
+					});
+				}
 			});
 		} catch {
 
@@ -300,15 +313,27 @@ export class TestRunner {
 		try {
 			return new Promise<any>((resolve) => {
 				let testBuildApplication = ConfigurationProvider.getString('testBuildApplication', workspace?.uri);
-				this.buildProcess = childProcess.exec(
-					testBuildApplication + ' ' + buildArgs,
+				this.buildProcess = childProcess.spawn(
+					testBuildApplication,
+					buildArgs.split(' '),
 					{
 						cwd: workspace?.uri.fsPath,
-					},
-					(error, stdout, stderr) => {
-						resolve({ error, stdout, stderr });
+						shell: false
 					},
 				);
+				let stdout = '';
+				let stderr = '';
+				if (this.buildProcess && this.buildProcess.stdout) {
+					this.buildProcess.stdout.on('data', (data?) => { stdout += data?.toString(); });
+				}
+				if (this.buildProcess && this.buildProcess.stderr) {
+					this.buildProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+				}
+				if (this.buildProcess) {
+					this.buildProcess.on('close', (code) => {
+						resolve({ error: code !== 0 ? new Error(`Exited with code ${code}`) : null, stdout, stderr });
+					});
+				}
 			});
 		} finally {
 			release();
